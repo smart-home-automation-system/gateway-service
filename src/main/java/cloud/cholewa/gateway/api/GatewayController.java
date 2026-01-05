@@ -24,7 +24,8 @@ public class GatewayController {
         @RequestParam(name = "message") final String interfaceType,
         @RequestBody final String message
     ) {
-        log.info("Incoming AMX message from module: {} and content: {}", interfaceType, message);
-        return gatewayService.parseEatonMessage(interfaceType, message);
+        return gatewayService.parseEatonMessage(interfaceType, message)
+            .doOnSubscribe(subscription ->
+                log.info("Incoming AMX message from module: {} and content: {}", interfaceType, message));
     }
 }
