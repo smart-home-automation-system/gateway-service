@@ -1,13 +1,14 @@
 package cloud.cholewa.gateway.api;
 
 import cloud.cholewa.gateway.service.GatewayService;
+import cloud.cholewa.home.model.EatonDatagramReply;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
-import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import reactor.core.publisher.Mono;
 
@@ -19,13 +20,15 @@ public class GatewayController {
 
     private final GatewayService gatewayService;
 
-    @GetMapping
-    Mono<ResponseEntity<Void>> incomingGet(
-        @RequestParam(name = "message") final String interfaceType,
-        @RequestBody final String message
-    ) {
-        return gatewayService.parseEatonMessage(interfaceType, message)
+    @PostMapping
+    Mono<ResponseEntity<Void>> consumeAmxMessage(@RequestBody @Valid EatonDatagramReply reply) {
+        return gatewayService.consumeAmxMessage(reply)
             .doOnSubscribe(subscription ->
-                log.info("Incoming AMX message from module: {} and content: {}", interfaceType, message));
+                log.info(
+                    "Consuming AMX message from module: {} and content: [{}]",
+                    reply.getGateway(),
+                    reply.getMessage()
+                ))
+            .then(Mono.fromCallable(() -> ResponseEntity.ok().build()));
     }
 }
