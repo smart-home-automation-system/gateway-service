@@ -6,17 +6,27 @@ spring:
     active: home
   webflux:
     base-path: "/home"
+  rabbitmq:
+    host: localhost
+    port: 5672
+    virtual-host: "temperature"
+    username: "${rabbitmq.username:guest}"
+    password: "${rabbitmq.password:guest}"
+    connection-timeout: 10s
+    requested-heartbeat: 30s
+    template:
+      retry:
+        enabled: true
+        initial-interval: 1000ms
+        multiplier: 5
 
 server:
   port: 6200
 
 internal:
   service:
-    configuration:
+    database:
       host: database-service
-      port: 6200
-    heating:
-      host: heating-service
       port: 6200
 
 logbook:
@@ -26,6 +36,8 @@ logbook:
 logging:
   level:
     org.zalando.logbook: trace
+    org.springframework.amqp: INFO
+    org.springframework.amqp.rabbit.connection: DEBUG
 
 ---
 
@@ -42,9 +54,6 @@ management:
 
 internal:
   service:
-    configuration:
-      host: 10.78.20.12
-      port: 80
-    heating:
+    database:
       host: localhost
-      port: 6002
+      port: 6005
