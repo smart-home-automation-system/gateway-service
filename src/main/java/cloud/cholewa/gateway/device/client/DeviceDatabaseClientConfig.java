@@ -4,8 +4,8 @@ import jakarta.validation.constraints.NotNull;
 import org.springframework.boot.context.properties.ConfigurationProperties;
 import org.springframework.web.util.UriBuilder;
 
-@ConfigurationProperties("internal.service.configuration")
-public record DeviceConfigurationClientConfig(
+@ConfigurationProperties("internal.service.database")
+public record DeviceDatabaseClientConfig(
     @NotNull String host,
     @NotNull String port
 ) {
