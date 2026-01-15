@@ -1,7 +1,7 @@
 package cloud.cholewa.gateway.rabbit;
 
-import cloud.cholewa.gateway.model.TemperatureMessage;
 import cloud.cholewa.home.model.RoomName;
+import cloud.cholewa.home.model.TemperatureMessage;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -12,7 +12,9 @@ import reactor.test.StepVerifier;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class TemperaturePublisherTest {
@@ -25,20 +27,16 @@ class TemperaturePublisherTest {
 
     @Test
     void should_publish_temperature_message() {
-        // given
         double temperature = 22.5;
         RoomName room = RoomName.LIVING_ROOM;
 
-        // when
         sut.publish(temperature, room)
             .as(StepVerifier::create)
             .verifyComplete();
 
-        // then
-        verify(rabbitTemplate).convertAndSend(
-            eq("temperature.events"),
-            eq(""),
-            any(TemperatureMessage.class)
-        );
+        verify(rabbitTemplate, times(1))
+            .convertAndSend(eq("temperature.events"), eq(""), any(TemperatureMessage.class));
+
+        verifyNoMoreInteractions(rabbitTemplate);
     }
 }

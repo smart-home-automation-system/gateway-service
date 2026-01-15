@@ -7,17 +7,11 @@ import org.springframework.amqp.rabbit.connection.ConnectionNameStrategy;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.amqp.support.converter.JacksonJsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
-import org.springframework.boot.ApplicationRunner;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 @Configuration
 public class RabbitConfig {
-
-    @Bean
-    ApplicationRunner eagerRabbitConnection(final ConnectionFactory connectionFactory) {
-        return args -> connectionFactory.createConnection().close();
-    }
 
     @Bean
     RabbitTemplate rabbitTemplate(final ConnectionFactory connectionFactory) {
