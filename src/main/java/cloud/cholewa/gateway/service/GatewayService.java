@@ -1,76 +1,49 @@
 package cloud.cholewa.gateway.service;
 
-import cloud.cholewa.eaton.infrastructure.error.EatonParsingException;
-import cloud.cholewa.eaton.utilities.MessageUtilities;
-import cloud.cholewa.eaton.utilities.MessageValidator;
-import cloud.cholewa.eaton.utilities.RoomControllerParser;
-import cloud.cholewa.gateway.device.client.DeviceConfigurationClient;
-import cloud.cholewa.gateway.heating.client.HeatingClient;
-import cloud.cholewa.gateway.model.EatonDeviceStatus;
-import cloud.cholewa.home.model.DeviceStatusUpdate;
-import cloud.cholewa.home.model.EatonGateway;
+import cloud.cholewa.gateway.device.client.DeviceDatabaseClient;
+import cloud.cholewa.gateway.rabbit.TemperaturePublisher;
+import cloud.cholewa.home.model.EatonConfigurationResponse;
+import cloud.cholewa.home.model.EatonDatagramReply;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import reactor.core.publisher.Mono;
 
+import java.util.List;
 import java.util.Objects;
+
+import static cloud.cholewa.eaton.utilities.MessageUtilities.extractDataPoint;
+import static cloud.cholewa.eaton.utilities.MessageUtilities.extractMessage;
+import static cloud.cholewa.eaton.utilities.MessageValidator.isValidEatonMessage;
+import static cloud.cholewa.eaton.utilities.device.TemperatureParser.calculateRoomTemperature;
 
 @Service
 @Slf4j
 @RequiredArgsConstructor
 public class GatewayService {
 
-    private final DeviceConfigurationClient deviceConfigurationClient;
-    private final HeatingClient heatingClient;
+    private final DeviceDatabaseClient deviceDatabaseClient;
+    private final TemperaturePublisher temperaturePublisher;
 
-    public Mono<ResponseEntity<Void>> parseEatonMessage(final String interfaceType, final String fullMessage) {
-
-        return Mono.just(fullMessage)
-            .filter(MessageValidator::isValidEatonMessage)
-            .flatMap(message -> Mono.zip(
-                Mono.just(MessageUtilities.extractMessage(message)),
-                Mono.just(findEatonGateway(interfaceType))
-            ))
-            .flatMap(t -> Mono.zip(
-                Mono.just(t.getT1()),
-                deviceConfigurationClient.getDeviceConfiguration(
-                    t.getT2(),
-                    MessageUtilities.extractDataPoint(t.getT1())
-                )
-            ))
-            .map(t -> EatonDeviceStatus.builder()
-                .dataPoint(MessageUtilities.extractDataPoint(t.getT1()))
-                .message(t.getT1())
-                .roomName(Objects.requireNonNull(t.getT2().getBody()).getRoomName())
-                .deviceType(Objects.requireNonNull(t.getT2().getBody()).getDeviceType())
-                .temperature(RoomControllerParser.calculateRoomTemperature(t.getT1()))
-                .build()
-            )
-            .doOnNext(eatonDeviceStatus ->
-                log.info(
-                    "For room: {}, found device: {} with id: [{}] and temperature value: {}",
-                    eatonDeviceStatus.getRoomName().name(),
-                    eatonDeviceStatus.getDeviceType().name(),
-                    eatonDeviceStatus.getDataPoint(),
-                    eatonDeviceStatus.getTemperature()
-                )
-            )
-            .flatMap(eatonDeviceStatus -> heatingClient.sendDeviceStatus(
-                DeviceStatusUpdate.builder()
-                    .roomName(eatonDeviceStatus.getRoomName())
-                    .deviceType(eatonDeviceStatus.getDeviceType())
-                    .value(eatonDeviceStatus.getTemperature().toString())
-                    .build()
-            ));
+    public Mono<Void> consumeAmxMessage(final EatonDatagramReply reply) {
+        return Mono.fromCallable(() -> isValidEatonMessage(reply.getMessage()))
+            .filter(valid -> valid)
+            .map(valid -> extractMessage(reply.getMessage()))
+            .zipWhen(message ->
+                deviceDatabaseClient.getEatonConfiguration(extractDataPoint(message), reply.getGateway()))
+            .doOnNext(tuple ->
+                log.info("Publishing message type: {} for room: {}", tuple.getT2().getType(), tuple.getT2().getRoom()))
+            .flatMap(tuple -> publishOnRabbit(tuple.getT1(), tuple.getT2()));
     }
 
-    private EatonGateway findEatonGateway(final String interfaceType) {
-        try {
-            return EatonGateway.fromValue(interfaceType);
-        } catch (final IllegalArgumentException e) {
-            throw new EatonParsingException("Unknown Eaton Gateway: " + interfaceType);
-        }
+    private Mono<Void> publishOnRabbit(final List<String> message, final EatonConfigurationResponse configuration) {
+        return switch (Objects.requireNonNull(configuration.getType())) {
+            case TEMPERATURE_SENSOR ->
+                temperaturePublisher.publish(calculateRoomTemperature(message), configuration.getRoom());
+            case BLINDS -> Mono.error(new RuntimeException("Blinds are not supported yet"));
+            case LIGHT -> Mono.error(new RuntimeException("Lights are not supported yet"));
+            case DIMMER -> Mono.error(new RuntimeException("Dimmers are not supported yet"));
+            case OTHER -> Mono.error(new RuntimeException("Other devices are not supported yet"));
+        };
     }
 }
