@@ -7,9 +7,9 @@ spring:
   webflux:
     base-path: "/home"
   rabbitmq:
-    host: localhost
+    host: rabbitmq-headless
     port: 5672
-    virtual-host: "temperature"
+    virtual-host: "/temperature"
     username: "${rabbitmq.username:guest}"
     password: "${rabbitmq.password:guest}"
     connection-timeout: 10s
@@ -45,6 +45,8 @@ spring:
   config:
     activate:
       on-profile: local
+  rabbitmq:
+    host: localhost
 
 server:
   port: 6001
